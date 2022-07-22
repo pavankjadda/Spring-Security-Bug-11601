@@ -4,21 +4,26 @@ import com.example.springsecuritybug11601.security.providers.CustomDaoAuthentica
 import com.example.springsecuritybug11601.security.userdetails.PresDbUserDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.ldap.core.DirContextAdapter;
+import org.springframework.ldap.core.DirContextOperations;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.ldap.authentication.ad.ActiveDirectoryLdapAuthenticationProvider;
+import org.springframework.security.ldap.userdetails.UserDetailsContextMapper;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Collection;
 import java.util.Collections;
 
 import static com.example.springsecuritybug11601.constants.AuthorityConstants.*;
@@ -27,7 +32,7 @@ import static com.example.springsecuritybug11601.constants.AuthorityConstants.*;
  * Core security config class of the project
  *
  * @author Pavan Kumar Jadda
- * @since 2.0.0
+ * @since 1.0.0
  */
 @Configuration
 @EnableWebSecurity
@@ -44,7 +49,7 @@ public class SecurityConfig {
      * DAO Authentication Provider that provides internal accounts for login. Only to be used in Dev and Test environments
      *
      * @author Pavan Kumar Jadda
-     * @since 2.0.0
+     * @since 1.0.0
      */
     @Bean
     public CustomDaoAuthenticationProvider daoAuthenticationProvider() {
@@ -54,11 +59,41 @@ public class SecurityConfig {
         return daoAuthenticationProvider;
     }
 
+    //TODO replace the LDAP Domain, URL and Authorities
+
+    /**
+     * Active Directory Authentication Provider that integrates with AD
+     *
+     * @author Pavan Kumar Jadda
+     * @since 1.0.0
+     */
+    public ActiveDirectoryLdapAuthenticationProvider activeDirectoryLdapAuthenticationProvider() {
+        ActiveDirectoryLdapAuthenticationProvider activeDirectoryLdapAuthenticationProvider = new ActiveDirectoryLdapAuthenticationProvider("domain", "url");
+        activeDirectoryLdapAuthenticationProvider.setConvertSubErrorCodesToExceptions(true);
+        activeDirectoryLdapAuthenticationProvider.setUserDetailsContextMapper(new UserDetailsContextMapper() {
+            @Override
+            public UserDetails mapUserFromContext(DirContextOperations ctx, String username, Collection<? extends GrantedAuthority> ldapGroups) {
+                /* Add implementation */
+
+                //Return new Spring Security user
+                return new org.springframework.security.core.userdetails.User(username, "", true, true, true, true,
+                        Collections.singleton(new SimpleGrantedAuthority("ROLE_USER")));
+            }
+
+            @Override
+            public void mapUserToContext(UserDetails user, DirContextAdapter ctx) {
+                //Implementation not needed
+            }
+        });
+
+        return activeDirectoryLdapAuthenticationProvider;
+    }
+
     /**
      * CORS filter to accept incoming requests
      *
      * @author Pavan Kumar Jadda
-     * @since 2.0.0
+     * @since 1.0.0
      */
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
@@ -74,7 +109,7 @@ public class SecurityConfig {
      * Bcrypt PasswordEncoder with strength 12
      *
      * @author Pavan Kumar Jadda
-     * @since 2.0.0
+     * @since 1.0.0
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -106,12 +141,6 @@ public class SecurityConfig {
         return (web) -> web.ignoring().antMatchers("/static/**");
     }
 
-    @Bean
-    public InMemoryUserDetailsManager userDetailsService() {
-        UserDetails user = User.withDefaultPasswordEncoder().username("admin").password("admin").roles("SYS_ADMIN").build();
-        return new InMemoryUserDetailsManager(user);
-    }
-
     /**
      * Defines SecurityFilterChain that authenticates External API users
      *
@@ -121,8 +150,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain externalApiFilterChain(HttpSecurity http) throws Exception {
         http.antMatcher("/api/v1/search/**")
-                .authorizeHttpRequests(registry -> registry.antMatchers("/api/v1/search/**").hasAnyAuthority(ROLE_API_USER,ROLE_SYS_ADMIN))
-                .httpBasic().and().sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+                .authorizeHttpRequests(registry -> registry.antMatchers("/api/v1/search/**").hasAnyAuthority(ROLE_API_USER, ROLE_SYS_ADMIN))
+                .authenticationProvider(activeDirectoryLdapAuthenticationProvider()).httpBasic().and().sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
 
         http.headers().frameOptions().disable();
 
@@ -144,11 +174,9 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(registry -> registry.antMatchers( "/api/v1/user/**")
-                        .hasAnyAuthority(ROLE_READ_ONLY_USER, ROLE_SYS_ADMIN))
-                .authenticationProvider(daoAuthenticationProvider()).httpBasic()
-                .and().logout()
-                .invalidateHttpSession(true).clearAuthentication(true);
+        http.authorizeHttpRequests(registry -> registry.antMatchers("/api/v1/user/**").hasAnyAuthority(ROLE_READ_ONLY_USER, ROLE_SYS_ADMIN))
+                .authenticationProvider(daoAuthenticationProvider()).authenticationProvider(activeDirectoryLdapAuthenticationProvider()).httpBasic().and()
+                .logout().invalidateHttpSession(true).clearAuthentication(true);
 
         http.headers().frameOptions().disable();
 
