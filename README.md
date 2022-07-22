@@ -5,6 +5,6 @@
 2. Insert table data [from resources](src/main/resources/scripts/db.sql) in DB.
 3. Run the following curl command and it will fail with 401 error while it's supposed to execute successfully.
     ```shell
-    curl --location --request GET 'http://localhost:8080/api/v1/user/home/jdoe' \
-    --header 'Authorization: Basic YWRtaW46YWRtaW4='
+   curl --location --request GET 'http://localhost:8080/api/v1/search' \
+   --header 'Authorization: Basic YWRtaW46YWRtaW4='
     ```
