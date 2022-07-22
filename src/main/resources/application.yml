@@ -1,0 +1,27 @@
+### Spring Properties
+spring:
+  application:
+    name: pres
+  jackson:
+    serialization:
+      FAIL_ON_EMPTY_BEANS: false
+
+  # PRES SQL Server datasource Properties
+  datasource:
+    url: jdbc:mysql://localhost:33061/spring_security_bug?useSSL=false&serverTimezone=UTC
+    username: root
+    password: Test@2020
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # JPA properties
+  jpa:
+    generate-ddl: false
+    hibernate:
+        ddl-auto: update
+        show_sql: false
+
+logging:
+  level:
+    org:
+      springframework:
+        security: DEBUG
